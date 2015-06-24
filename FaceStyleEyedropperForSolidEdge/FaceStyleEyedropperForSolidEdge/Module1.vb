@@ -68,32 +68,36 @@ Module Module1
         Dim haveStyle As Boolean = False
         If myOface IsNot Nothing Then
             Dim theFace As SolidEdgeGeometry.Face = DirectCast(myOface, SolidEdgeGeometry.Face)
-            If theFace.Style IsNot Nothing Then
-                fs = theFace.Style
+            'Why am I using PropExists?
+            'If I try to test for theFace.Style = Nothing and the style exists then it increments the rcw to 1.
+            'Then when you set fs = theFace.Style the rcw is now 2.
+            'You would then need to run ReleaseRCW twice to free the rcw. If you care about it at all.
+            If TryGetProp(theFace, "Style", fs) Then
                 mSolidApp.StatusBar = fs.StyleName
                 haveStyle = True
             Else
                 'feature style
                 Dim p As Object = Nothing
-                If PropExists(theFace, "Parent", p) Then
+                If TryGetProp(theFace, "Parent", p) Then
                     fs = p.GetStyle()
                     If fs IsNot Nothing Then
                         mSolidApp.StatusBar = fs.StyleName
                         haveStyle = True
                     End If
+                    ReleaseRCW(p)
                 End If
 
                 'look for body style
-                If theFace.Body IsNot Nothing And Not haveStyle Then
-                    Dim bdy As SolidEdgeGeometry.Body = theFace.Body
-                    If bdy.Style IsNot Nothing Then
-                        fs = bdy.Style
+                Dim bdy As SolidEdgeGeometry.Body = Nothing
+                If TryGetProp(theFace, "Body", bdy) And Not haveStyle Then
+                    If TryGetProp(bdy, "Style", fs) Then
                         mSolidApp.StatusBar = fs.StyleName
                         haveStyle = True
                     End If
+                    ReleaseRCW(bdy)
                 End If
             End If
-
+            ReleaseRCW(fs)
             If Not haveStyle Then
                 mSolidApp.StatusBar = "Material table style"
             End If
@@ -107,11 +111,10 @@ Module Module1
 
     End Sub
 
-    Private Function PropExists(o As Object, name As String, ByRef retProp As Object) As Boolean
+    Private Function TryGetProp(o As Object, name As String, ByRef retProp As Object) As Boolean
         retProp = o.GetType.InvokeMember(name, Reflection.BindingFlags.GetProperty, Nothing, o, Nothing)
         Return retProp IsNot Nothing
     End Function
-
 
     Private Sub ReleaseRCW(ByRef o As Object)
         If o IsNot Nothing Then
